@@ -16,6 +16,13 @@
         <div class="gradient-circle circle-1"></div>
         <div class="gradient-circle circle-2"></div>
         <div class="gradient-circle circle-3"></div>
+        <svg class="flight-path" viewBox="0 0 1200 800" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M-40 520 C 180 420, 320 610, 520 390 S 860 180, 1240 260"></path>
+            <circle class="plane-dot" r="5" fill="#fde68a">
+                <animateMotion dur="14s" repeatCount="indefinite"
+                    path="M-40 520 C 180 420, 320 610, 520 390 S 860 180, 1240 260" />
+            </circle>
+        </svg>
     </div>
 
     <main class="app-container">
@@ -30,8 +37,15 @@
             </h1>
 
             <p>
-                Search flights, discover hotels, and generate a complete travel itinerary using a multi-agent LangGraph system.
+                Four specialist agents handle flights, hotels, weather, and itinerary — then stitch one plan you can actually use.
             </p>
+
+            <div class="agent-pills" aria-hidden="true">
+                <span>✈️ Flights</span>
+                <span>🏨 Hotels</span>
+                <span>🌤️ Weather</span>
+                <span>🗺️ Itinerary</span>
+            </div>
         </section>
 
         <section class="planner-card">
@@ -62,22 +76,38 @@
                 </button>
             </div>
 
+            <p class="input-hint">Tip: press <kbd id="modKey">Ctrl</kbd> + <kbd>Enter</kbd> to generate</p>
+
             <div class="quick-prompts">
-                <button onclick="setPrompt('Plan a complete 7 days Japan trip from India including flights, hotels and sightseeing under 2 lakhs.')">
+                <button type="button" onclick="setPrompt(this, 'Plan a complete 7 days Japan trip from India including flights, hotels and sightseeing under 2 lakhs.')">
                     Japan Trip
                 </button>
 
-                <button onclick="setPrompt('Plan a 5 days Dubai trip from India with flights, hotels and sightseeing.')">
+                <button type="button" onclick="setPrompt(this, 'Plan a 5 days Dubai trip from India with flights, hotels and sightseeing.')">
                     Dubai Trip
                 </button>
 
-                <button onclick="setPrompt('Plan a 7 days Thailand trip from India with budget hotels and sightseeing.')">
+                <button type="button" onclick="setPrompt(this, 'Plan a 7 days Thailand trip from India with budget hotels and sightseeing.')">
                     Thailand Trip
                 </button>
 
-                <button onclick="setPrompt('Give me all country flight info.')">
+                <button type="button" onclick="setPrompt(this, 'Give me all country flight info.')">
                     Global Flights
                 </button>
+            </div>
+
+            <div id="agentProgress" class="agent-progress hidden" aria-live="polite">
+                <div class="progress-copy">
+                    <p class="progress-kicker">Agents at work</p>
+                    <p id="progressStatus">Finding flights…</p>
+                </div>
+                <ol class="progress-steps">
+                    <li data-step="0">Flights</li>
+                    <li data-step="1">Hotels</li>
+                    <li data-step="2">Weather</li>
+                    <li data-step="3">Itinerary</li>
+                    <li data-step="4">Final plan</li>
+                </ol>
             </div>
 
         </section>
@@ -87,6 +117,7 @@
             <div class="result-header">
                 <div>
                     <h2>Your AI Travel Plan</h2>
+                    <p id="planMeta" class="plan-meta">Ready when you are</p>
                     <p id="threadInfo">Thread ID: -</p>
                 </div>
 

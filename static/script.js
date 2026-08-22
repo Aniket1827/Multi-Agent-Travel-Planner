@@ -1,8 +1,21 @@
 let currentThreadId = localStorage.getItem("travel_thread_id") || null;
 let latestAnswerMarkdown = "";
+let progressTimer = null;
+let progressStep = 0;
 
-function setPrompt(text) {
+const AGENT_STEPS = [
+    "Finding flights…",
+    "Searching hotels…",
+    "Checking weather…",
+    "Building your itinerary…",
+    "Writing the final plan…"
+];
+
+function setPrompt(button, text) {
     document.getElementById("userInput").value = text;
+    document.querySelectorAll(".quick-prompts button").forEach((btn) => {
+        btn.classList.toggle("active", btn === button);
+    });
 }
 
 function setLoading(isLoading) {
@@ -15,9 +28,60 @@ function setLoading(isLoading) {
     if (isLoading) {
         btnText.classList.add("hidden");
         btnLoader.classList.remove("hidden");
+        startAgentProgress();
     } else {
         btnText.classList.remove("hidden");
         btnLoader.classList.add("hidden");
+        stopAgentProgress();
+    }
+}
+
+function renderProgress() {
+    const status = document.getElementById("progressStatus");
+    const items = document.querySelectorAll(".progress-steps li");
+
+    if (status) {
+        status.textContent = AGENT_STEPS[progressStep];
+    }
+
+    items.forEach((item, index) => {
+        item.classList.toggle("active", index === progressStep);
+        item.classList.toggle("done", index < progressStep);
+    });
+}
+
+function startAgentProgress() {
+    const panel = document.getElementById("agentProgress");
+
+    progressStep = 0;
+    panel.classList.remove("hidden");
+    renderProgress();
+
+    clearInterval(progressTimer);
+    progressTimer = setInterval(() => {
+        if (progressStep < AGENT_STEPS.length - 1) {
+            progressStep += 1;
+            renderProgress();
+        }
+    }, 2400);
+}
+
+function stopAgentProgress(complete = false) {
+    const panel = document.getElementById("agentProgress");
+
+    clearInterval(progressTimer);
+    progressTimer = null;
+
+    if (complete) {
+        progressStep = AGENT_STEPS.length;
+        document.getElementById("progressStatus").textContent = "Plan ready.";
+        document.querySelectorAll(".progress-steps li").forEach((item) => {
+            item.classList.remove("active");
+            item.classList.add("done");
+        });
+        setTimeout(() => panel.classList.add("hidden"), 900);
+    } else {
+        panel.classList.add("hidden");
     }
 }
 
@@ -35,12 +99,13 @@ function hideError() {
     errorBox.textContent = "";
 }
 
-function showResult(answer, threadId) {
+function showResult(answer, threadId, llmCalls) {
     latestAnswerMarkdown = answer;
 
     const resultSection = document.getElementById("resultSection");
     const resultBox = document.getElementById("resultBox");
     const threadInfo = document.getElementById("threadInfo");
+    const planMeta = document.getElementById("planMeta");
 
     if (typeof marked !== "undefined") {
         resultBox.innerHTML = marked.parse(answer);
@@ -48,9 +113,14 @@ function showResult(answer, threadId) {
         resultBox.innerText = answer;
     }
 
+    const callLabel = llmCalls === 1 ? "1 agent call" : `${llmCalls || 0} agent calls`;
+    planMeta.textContent = `4 specialists · ${callLabel}`;
     threadInfo.textContent = `Thread ID: ${threadId}`;
 
     resultSection.classList.remove("hidden");
+    resultSection.classList.remove("rise-in");
+    void resultSection.offsetWidth;
+    resultSection.classList.add("rise-in");
 
     resultSection.scrollIntoView({
         behavior: "smooth",
@@ -92,12 +162,20 @@ async function sendMessage() {
         currentThreadId = data.thread_id;
         localStorage.setItem("travel_thread_id", currentThreadId);
 
-        showResult(data.answer, data.thread_id);
+        stopAgentProgress(true);
+        showResult(data.answer, data.thread_id, data.llm_calls);
 
     } catch (error) {
+        stopAgentProgress(false);
         showError(error.message);
     } finally {
-        setLoading(false);
+        const sendBtn = document.getElementById("sendBtn");
+        const btnText = document.getElementById("btnText");
+        const btnLoader = document.getElementById("btnLoader");
+
+        sendBtn.disabled = false;
+        btnText.classList.remove("hidden");
+        btnLoader.classList.add("hidden");
     }
 }
 
@@ -149,7 +227,7 @@ function downloadPDF() {
         html2canvas: {
             scale: 2,
             useCORS: true,
-            backgroundColor: "#ffffff"
+            backgroundColor: "#fffaf3"
         },
         jsPDF: {
             unit: "in",
@@ -177,7 +255,16 @@ function downloadPDF() {
 }
 
 document.addEventListener("keydown", function(event) {
-    if (event.ctrlKey && event.key === "Enter") {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         sendMessage();
+    }
+});
+
+document.addEventListener("DOMContentLoaded", function() {
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+    const modKey = document.getElementById("modKey");
+
+    if (modKey && isMac) {
+        modKey.textContent = "⌘";
     }
 });
