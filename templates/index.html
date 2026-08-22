@@ -112,6 +112,25 @@
 
         </section>
 
+        <section id="tripSummary" class="trip-summary hidden">
+            <div class="summary-chip">
+                <span>Destination</span>
+                <strong id="summaryDest">—</strong>
+            </div>
+            <div class="summary-chip">
+                <span>From</span>
+                <strong id="summaryOrigin">—</strong>
+            </div>
+            <div class="summary-chip">
+                <span>Duration</span>
+                <strong id="summaryDays">—</strong>
+            </div>
+            <div class="summary-chip">
+                <span>Budget</span>
+                <strong id="summaryBudget">—</strong>
+            </div>
+        </section>
+
         <section id="resultSection" class="result-section hidden">
 
             <div class="result-header">
@@ -132,9 +151,30 @@
                 </div>
             </div>
 
-            <div id="pdfContent" class="pdf-content">
-                <h1 class="pdf-title">AI Travel Plan</h1>
-                <div id="resultBox" class="result-box"></div>
+            <div class="result-tabs" role="tablist">
+                <button type="button" class="tab-btn active" data-tab="plan">Full plan</button>
+                <button type="button" class="tab-btn" data-tab="flights">Flights</button>
+                <button type="button" class="tab-btn" data-tab="hotels">Hotels</button>
+                <button type="button" class="tab-btn" data-tab="weather">Weather</button>
+            </div>
+
+            <div id="panel-plan" class="tab-panel">
+                <div id="pdfContent" class="pdf-content">
+                    <h1 class="pdf-title">AI Travel Plan</h1>
+                    <div id="resultBox" class="result-box"></div>
+                </div>
+            </div>
+
+            <div id="panel-flights" class="tab-panel hidden">
+                <div id="flightsBox" class="result-box paper-panel"></div>
+            </div>
+
+            <div id="panel-hotels" class="tab-panel hidden">
+                <div id="hotelsBox" class="result-box paper-panel"></div>
+            </div>
+
+            <div id="panel-weather" class="tab-panel hidden">
+                <div id="weatherBox" class="result-box paper-panel"></div>
             </div>
 
         </section>
