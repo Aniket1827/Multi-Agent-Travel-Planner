@@ -1,6 +1,7 @@
 import os
 import certifi
 import uuid
+import asyncio
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, START, END
 
@@ -8,11 +9,12 @@ from langchain_core.messages import AnyMessage, HumanMessage, AIMessage, SystemM
 from langchain_groq import ChatGroq
 from pycountry.db import Data
 from requests import get
-from tools.tavily_tool import tavily_search
-from tools.flight_tool import search_flights
+# from tools.tavily_tool import tavily_search
+# from tools.flight_tool import search_flights
 from state.travel_state import TravelState
 from db.connect import get_checkpointer
-
+from mcp_client import extract_destination, forecast_mcp_search, tavily_mcp_search, aviation_mcp_call, weather_mcp_search
+from constants import FLIGHT_AGENT_PROMPT
 
 load_dotenv()
 
@@ -25,30 +27,78 @@ if not GROQ_API_KEY:
 
 
 llm = ChatGroq(
-    model = "openai/gpt-oss-120b",
+    model = "openai/gpt-oss-safeguard-20b",
     api_key = GROQ_API_KEY,
 )
 
+# def flight_agent(state: TravelState):
+#     query = state["user_query"]
+#     flight_data = search_flights(query)
+
+#     return {
+#         "flight_results": flight_data,
+#         "messages": [
+#             AIMessage(content="Flight results fetched"),
+#         ],
+#         "llm_calls": state.get("llm_calls", 0) + 1
+#     }
+
 def flight_agent(state: TravelState):
     query = state["user_query"]
-    flight_data = search_flights(query)
 
-    return {
-        "flight_results": flight_data,
-        "messages": [
-            AIMessage(content="Flight results fetched"),
-        ],
-        "llm_calls": state.get("llm_calls", 0) + 1
-    }
+    try:
+        airports = asyncio.run(aviation_mcp_call("list_airports"))
+        airlines = asyncio.run(aviation_mcp_call("list_airlines"))
+
+        prompt = FLIGHT_AGENT_PROMPT.format(
+            query = query,
+            airport_data = str(airports)[:1500],
+            airline_data = str(airlines)[:1500]
+        )
+
+        response = llm.invoke([
+            SystemMessage(content="You are a travel flight expert."),
+            HumanMessage(content=prompt)
+        ])
+
+        return {
+            "flight_results": response.content,
+        }
+    except Exception as e:
+        return {
+            "flight_results": f"Error fetching flight data: {e}",
+            "messages": [
+                AIMessage(content=f"Error fetching flight data: {e}"),
+            ],
+            "llm_calls": state.get("llm_calls", 0) + 1
+        }
 
 def hotel_agent(state: TravelState):
     query = f"Suggest beest hotels for {state['user_query']}"
-    hotel_data = tavily_search(query)
-
+    # hotel_data = tavily_search(query)
+    hotel_data = asyncio.run(tavily_mcp_search(query))
     return {
         "hotel_results": hotel_data,
         "messages": [
             AIMessage(content="Hotel results fetched"),
+        ],
+        "llm_calls": state.get("llm_calls", 0) + 1
+    }
+
+def weather_agent(state: TravelState):
+    city = extract_destination(state["user_query"])
+    weather_data = asyncio.run(weather_mcp_search(city))
+    forecast_data = asyncio.run(forecast_mcp_search(city))
+    return {
+        "weather_results": f"""
+            Current Weather:
+            {weather_data}
+
+            Forecast:
+            {forecast_data}
+        """,
+        "messages": [
+            AIMessage(content="Weather results fetched"),
         ],
         "llm_calls": state.get("llm_calls", 0) + 1
     }
@@ -66,6 +116,9 @@ def itinerary_agent(state: TravelState):
         Hotel Results:
         {state['hotel_results']}
 
+        Weather:
+        {state['weather_results']}
+
         Make the itinerary practical, budget-aware, and easy to follow.
     """
 
@@ -80,6 +133,8 @@ def itinerary_agent(state: TravelState):
         "llm_calls": state.get("llm_calls", 0) + 1
     }
 
+# Flights:
+#         {state['flight_results']}
 def final_agent(state: TravelState):
     final_prompt = f"""
         Generate the final travel response for the user.
@@ -87,11 +142,12 @@ def final_agent(state: TravelState):
         User Request:
         {state['user_query']}
 
-        Flights:
-        {state['flight_results']}
 
         Hotels:
         {state['hotel_results']}
+
+        Weather:
+        {state['weather_results']}
 
         Itinerary:
         {state["itinerary"]}
@@ -101,9 +157,10 @@ def final_agent(state: TravelState):
         1. Trip Summary
         2. Flight Information
         3. Hotel Suggestions
-        4. Day-by-Day Itinerary
-        5. Estimated Budget
-        6. Final Recommendations
+        4. Weather Information
+        5. Day-by-Day Itinerary
+        6. Estimated Budget
+        7. Final Recommendations
 
         Important:
         - Be clear and practical.
@@ -124,12 +181,14 @@ def final_agent(state: TravelState):
 graph = StateGraph(TravelState)
 graph.add_node("flight_agent", flight_agent)
 graph.add_node("hotel_agent", hotel_agent)
+graph.add_node("weather_agent", weather_agent)
 graph.add_node("itinerary_agent", itinerary_agent)
 graph.add_node("final_agent", final_agent)
 
 graph.add_edge(START, "flight_agent")
 graph.add_edge("flight_agent", "hotel_agent")
-graph.add_edge("hotel_agent", "itinerary_agent")
+graph.add_edge("hotel_agent", "weather_agent")
+graph.add_edge("weather_agent", "itinerary_agent")
 graph.add_edge("itinerary_agent", "final_agent")
 graph.add_edge("final_agent", END)
 
@@ -154,6 +213,7 @@ def run_travel_agent(user_input: str, thread_id: str | None = None):
             "user_query": user_input,
             "flight_results": "",
             "hotel_results": "",
+            "weather_results": "",
             "itinerary": "",
             "llm_calls": 0
         }, config=config
@@ -165,7 +225,9 @@ def run_travel_agent(user_input: str, thread_id: str | None = None):
         "answer": final_answer,
         "flight_results": result.get("flight_results", ""),
         "hotel_results": result.get("hotel_results", ""),
+        "weather_results": result.get("weather_results", ""),
         "itinerary": result.get("itinerary", ""),
         "llm_calls": result.get("llm_calls", 0)
     }
+
 

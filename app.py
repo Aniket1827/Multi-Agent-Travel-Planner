@@ -1,5 +1,6 @@
 import traceback
 import uvicorn
+import nest_asyncio
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -9,6 +10,7 @@ from pydantic import BaseModel
 from backend import run_travel_agent
 from state.travel_request import TravelRequest
 
+nest_asyncio.apply()
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(
