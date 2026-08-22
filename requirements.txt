@@ -14,4 +14,7 @@ pycountry
 fastapi
 uvicorn
 jinja2
+langchain-mcp-adapters
+nest_asyncio
+mcp
 
