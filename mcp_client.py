@@ -17,7 +17,7 @@ if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY is not set")
 
 llm = ChatGroq(
-    model = "openai/gpt-oss-safeguard-20b",
+    model = "openai/gpt-oss-120b",
     api_key = GROQ_API_KEY,
 )
 
@@ -115,11 +115,11 @@ async def forecast_mcp_search(city: str):
 
 def extract_destination(query: str):
     prompt = f"""
-        You are a travel expert. You are given a user's query.
-        Extract the destination city from the user's query.
-        The destination city is the city the user wants to visit.
-        The destination city is usually mentioned in the query.
-        The destination city is usually a city name.    
+        Extract only the destination city or country the traveler wants to visit.
+        Return a short place name and nothing else.
+
+        User query:
+        {query}
     """
     response = llm.invoke(prompt)
     return response.content.strip()
